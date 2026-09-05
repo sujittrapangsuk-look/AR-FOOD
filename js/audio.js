@@ -1,6 +1,7 @@
 // ==========================================
 // AR NutriQuest Audio & Voice Engine
 // Web Audio API Procedural SFX + Web Speech Thai Voice
+// Fully compatible with GitHub Pages, Chrome, Safari, iOS & Android
 // ==========================================
 
 class AudioEngine {
@@ -8,94 +9,185 @@ class AudioEngine {
     this.ctx = null;
     this.sfxEnabled = true;
     this.voiceEnabled = true;
-    this.speechSynth = window.speechSynthesis || null;
+    this.speechSynth = typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis : null;
     this.thaiVoice = null;
+    this.isUnlocked = false;
+    this.activeUtterances = new Set();
+    this.voicePollCount = 0;
+    this.speechWatchdog = null;
+
     this.initAudioContext();
     this.loadVoices();
+    this.setupUnlockListeners();
   }
 
+  // Initialize AudioContext safely
   initAudioContext() {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
+      if (AudioCtx && !this.ctx) {
         this.ctx = new AudioCtx();
       }
     } catch (e) {
-      console.warn('AudioContext not supported:', e);
+      console.warn('AudioContext initialization error:', e);
+    }
+  }
+
+  // Setup global user-gesture unlock listeners for strict browser autoplay policies (GitHub Pages HTTPS)
+  setupUnlockListeners() {
+    const unlockHandler = () => {
+      this.unlock();
+    };
+
+    const events = ['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'];
+    events.forEach(evt => {
+      window.addEventListener(evt, unlockHandler, { passive: true, capture: true });
+      document.addEventListener(evt, unlockHandler, { passive: true, capture: true });
+    });
+  }
+
+  // Unlock Web Audio and Web Speech upon first user interaction
+  unlock() {
+    if (this.isUnlocked && this.ctx && this.ctx.state === 'running') return;
+
+    try {
+      if (!this.ctx) {
+        this.initAudioContext();
+      }
+
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+
+        // Play 1 silent frame to unlock iOS/Safari WebKit audio hardware pipe
+        try {
+          const buffer = this.ctx.createBuffer(1, 1, 22050);
+          const source = this.ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(this.ctx.destination);
+          source.start(0);
+        } catch (err) {}
+      }
+
+      // Unlock SpeechSynthesis if paused
+      if (this.speechSynth) {
+        if (this.speechSynth.paused) {
+          this.speechSynth.resume();
+        }
+        // If voice was not loaded yet, try loading now
+        if (!this.thaiVoice) {
+          this.loadVoices();
+        }
+      }
+
+      this.isUnlocked = true;
+    } catch (e) {
+      console.warn('Audio unlock warning:', e);
     }
   }
 
   ensureContext() {
+    if (!this.ctx) {
+      this.initAudioContext();
+    }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
   }
 
+  // Multi-stage Voice loading with polling fallback for Chrome / Android / iOS
   loadVoices() {
     if (!this.speechSynth) return;
+
     const findVoice = () => {
-      this.thaiVoice = this.getBestMaleVoice();
+      const best = this.getBestThaiVoice();
+      if (best) {
+        this.thaiVoice = best;
+      }
     };
+
     findVoice();
-    if (this.speechSynth.onvoiceschanged !== undefined) {
-      this.speechSynth.onvoiceschanged = findVoice;
+
+    // Listen to voiceschanged event
+    if (typeof this.speechSynth.addEventListener === 'function') {
+      this.speechSynth.addEventListener('voiceschanged', findVoice);
     }
+    this.speechSynth.onvoiceschanged = findVoice;
+
+    // Polling retry for browsers where voices load asynchronously (Chrome/Android)
+    const pollInterval = setInterval(() => {
+      this.voicePollCount++;
+      findVoice();
+      if (this.thaiVoice || this.voicePollCount > 10) {
+        clearInterval(pollInterval);
+      }
+    }, 400);
   }
 
-  getBestMaleVoice() {
+  getBestThaiVoice() {
     if (!this.speechSynth) return null;
-    const voices = this.speechSynth.getVoices() || [];
+    let voices = [];
+    try {
+      voices = this.speechSynth.getVoices() || [];
+    } catch (e) {
+      return null;
+    }
     if (voices.length === 0) return null;
 
     // กรองเสียงภาษาไทยทั้งหมด
-    const thaiVoices = voices.filter(v => v.lang === 'th-TH' || v.lang.startsWith('th') || v.lang.toLowerCase().includes('th_th'));
-
-    // ตรวจสอบเสียงผู้ชาย
-    const isMale = (v) => {
-      const info = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
-      return info.includes('niwat') || info.includes('pattara') || info.includes('male') || info.includes('man') || info.includes('boy');
-    };
+    const thaiVoices = voices.filter(v => {
+      const lang = (v.lang || '').toLowerCase();
+      const name = (v.name || '').toLowerCase();
+      return lang.includes('th') || lang.includes('th-th') || lang.includes('th_th') || name.includes('thai') || name.includes('ไทย');
+    });
 
     if (thaiVoices.length > 0) {
-      // ลำดับความสำคัญของเสียงผู้ชายภาษาไทยคุณภาพสูง
-      const niwat = thaiVoices.find(v => v.name.includes('Niwat')); // Microsoft Niwat Natural (เสียงผู้ชายธรรมชาติ นุ่มนวล ชัดเจน)
-      if (niwat) return niwat;
+      // 1. ตรวจสอบเสียงผู้ชายภาษาไทยคุณภาพสูง (Natural / Neural)
+      const maleVoice = thaiVoices.find(v => {
+        const info = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
+        return info.includes('niwat') || info.includes('pattara') || info.includes('male') || info.includes('man') || info.includes('boy');
+      });
+      if (maleVoice) return maleVoice;
 
-      const pattara = thaiVoices.find(v => v.name.includes('Pattara')); // Microsoft Pattara
-      if (pattara) return pattara;
+      // 2. ตรวจสอบเสียงไทยคุณภาพสูงอื่นๆ (Google, Premwadee, Kanya, Narisa, Siri)
+      const naturalVoice = thaiVoices.find(v => {
+        const info = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
+        return info.includes('natural') || info.includes('google') || info.includes('premwadee') || info.includes('kanya') || info.includes('narisa') || info.includes('siri');
+      });
+      if (naturalVoice) return naturalVoice;
 
-      const explicitMale = thaiVoices.find(v => isMale(v));
-      if (explicitMale) return explicitMale;
-
-      // หากเบราว์เซอร์ไม่มีเสียงระบุเพศชัดเจน ให้ใช้เสียงไทยแล้วปรับ pitch ให้เป็นเสียงผู้ชาย
+      // 3. ใช้เสียงภาษาไทยตัวแรกที่พบ
       return thaiVoices[0];
     }
 
-    // กรณีไม่มีเสียงภาษาไทยโดยตรง ลองหาเสียงภาษาไทยทั่วไป
-    return voices.find(v => v.lang.includes('th')) || null;
+    return null;
   }
 
-  // เสียงสังเคราะห์ (Web Audio API)
+  // เสียงสังเคราะห์ (Web Audio API Synthesizer)
   playTone(freq, type = 'sine', duration = 0.2, gainVal = 0.15) {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
+      if (!this.ctx) return;
+
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
       osc.type = type;
       osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
 
-      gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+      const now = this.ctx.currentTime;
+      gain.gain.setValueAtTime(gainVal, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
-      osc.start();
-      osc.stop(this.ctx.currentTime + duration);
+      osc.start(now);
+      osc.stop(now + duration);
     } catch (e) {
-      // ignore
+      // Ignore audio rendering glitches
     }
   }
 
@@ -104,7 +196,7 @@ class AudioEngine {
   }
 
   playCorrect() {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
       const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
@@ -117,7 +209,7 @@ class AudioEngine {
   }
 
   playWrong() {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
       const notes = [220, 180];
@@ -138,7 +230,7 @@ class AudioEngine {
   }
 
   playLevelUp() {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
       const chords = [523.25, 659.25, 783.99, 1046.50, 1318.51];
@@ -151,30 +243,32 @@ class AudioEngine {
   }
 
   playBubble() {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
+      if (!this.ctx) return;
       const startFreq = 300 + Math.random() * 200;
       const endFreq = startFreq + 300;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
+      const now = this.ctx.currentTime;
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(endFreq, this.ctx.currentTime + 0.15);
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.15);
 
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
     } catch (e) {}
   }
 
   playFanfare() {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
       const song = [
@@ -196,7 +290,7 @@ class AudioEngine {
   }
 
   playCountdownBeep(isFinal = false) {
-    if (!this.sfxEnabled || !this.ctx) return;
+    if (!this.sfxEnabled) return;
     try {
       this.ensureContext();
       if (isFinal) {
@@ -208,33 +302,97 @@ class AudioEngine {
     } catch (e) {}
   }
 
-  // เสียงพูดภาษาไทย (Web Speech API) - โทนเสียงผู้ชาย อบอุ่น นุ่มนวล ชัดเจน
+  // เสียงพูดภาษาไทย (Web Speech API) - รองรับ Chrome, Safari iOS, Android และ GitHub Pages
   speak(text) {
-    if (!this.voiceEnabled || !this.speechSynth) return;
-    try {
-      this.speechSynth.cancel(); // หยุดเสียงก่อนหน้า
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'th-TH';
-      utterance.rate = 1.02; // จังหวะกำลังดี สุภาพ ฟังชัด
-      utterance.pitch = 0.95; // ปรับคีย์เสียงทุ้ม-กลาง สุภาพ แบบเสียงผู้ชาย
+    if (!this.voiceEnabled || !this.speechSynth || !text) return;
 
-      const maleVoice = this.thaiVoice || this.getBestMaleVoice();
-      if (maleVoice) {
-        utterance.voice = maleVoice;
+    try {
+      this.unlock();
+
+      // Clear any pending speech queue cleanly to avoid Chrome freeze
+      if (this.speechSynth.speaking || this.speechSynth.pending) {
+        this.speechSynth.cancel();
       }
-      this.speechSynth.speak(utterance);
+      if (this.speechSynth.paused) {
+        this.speechSynth.resume();
+      }
+
+      // Small delay after cancel to prevent Chrome from silently dropping next utterance
+      setTimeout(() => {
+        this.executeSpeak(text);
+      }, 35);
     } catch (e) {
       console.warn('Speech error:', e);
     }
   }
 
+  executeSpeak(text) {
+    if (!this.speechSynth || !this.voiceEnabled) return;
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'th-TH';
+      utterance.rate = 1.0;
+      utterance.pitch = 0.98;
+
+      // Select best Thai voice
+      const chosenVoice = this.thaiVoice || this.getBestThaiVoice();
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+
+      // Prevent Chrome Garbage Collection bug by retaining reference in Set
+      this.activeUtterances.add(utterance);
+
+      utterance.onend = () => {
+        this.activeUtterances.delete(utterance);
+        if (this.speechWatchdog) {
+          clearInterval(this.speechWatchdog);
+          this.speechWatchdog = null;
+        }
+      };
+
+      utterance.onerror = (e) => {
+        this.activeUtterances.delete(utterance);
+        if (this.speechWatchdog) {
+          clearInterval(this.speechWatchdog);
+          this.speechWatchdog = null;
+        }
+      };
+
+      // Chrome long-speech pause workaround
+      if (this.speechSynth.resume) {
+        this.speechSynth.resume();
+      }
+
+      this.speechSynth.speak(utterance);
+
+      // Start watchdog to keep speech alive on Chromium
+      if (!this.speechWatchdog && this.speechSynth.speaking) {
+        this.speechWatchdog = setInterval(() => {
+          if (this.speechSynth && this.speechSynth.speaking) {
+            this.speechSynth.pause();
+            this.speechSynth.resume();
+          } else {
+            clearInterval(this.speechWatchdog);
+            this.speechWatchdog = null;
+          }
+        }, 8000);
+      }
+    } catch (err) {
+      console.warn('Speech execute error:', err);
+    }
+  }
+
   toggleSfx() {
     this.sfxEnabled = !this.sfxEnabled;
+    this.unlock();
     return this.sfxEnabled;
   }
 
   toggleVoice() {
     this.voiceEnabled = !this.voiceEnabled;
+    this.unlock();
     if (!this.voiceEnabled && this.speechSynth) {
       this.speechSynth.cancel();
     }

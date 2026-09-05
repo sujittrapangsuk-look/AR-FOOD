@@ -64,10 +64,18 @@ class App {
     // 8. Start Initial Mode
     this.switchMode('classify');
 
-    // Welcome Voice Prompt
-    setTimeout(() => {
+    // 9. Welcome Voice Prompt triggered cleanly on first user interaction (Browser Autoplay Policy compliance)
+    let hasGreeted = false;
+    const triggerWelcomeVoice = () => {
+      if (hasGreeted) return;
+      hasGreeted = true;
+      audio.unlock();
       audio.speak('ยินดีต้อนรับสู่เกม AR อาหารและสารอาหาร ชั้น ป.6 แตะเปิดกล้องเพื่อสัมผัสอาหารในอากาศ หรือเลือกโหมดการเล่นได้เลยครับ');
-    }, 800);
+    };
+
+    ['click', 'touchstart', 'pointerdown'].forEach(evt => {
+      window.addEventListener(evt, triggerWelcomeVoice, { once: true, passive: true });
+    });
   }
 
   bindArEvents() {
