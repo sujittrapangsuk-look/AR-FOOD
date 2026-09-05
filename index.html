@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AR NutriQuest: ภารกิจพิชิตสารอาหาร ป.6 | สื่อการเรียนรู้เสมือนจริง</title>
+  <meta name="description" content="เกม AR แบบสัมผัส เรื่อง อาหารและสารอาหาร สำหรับนักเรียนชั้นประถมศึกษาปีที่ 6 ตามหลักสูตรวิทยาศาสตร์ สสวท.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+
+  <!-- External AR & 3D Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <!-- ================= AR CAMERA & 3D VIEWPORT LAYER ================= -->
+  <div id="ar-viewport-container">
+    <video id="webcam-video" autoplay playsinline muted></video>
+    <canvas id="ar-hand-canvas"></canvas>
+    <div id="three-container"></div>
+  </div>
+
+  <!-- ================= APP USER INTERFACE LAYER ================= -->
+  <div id="app-shell">
+    
+    <!-- Top Navigation & Controls -->
+    <header class="top-nav-bar glassmorphism">
+      <div class="brand-title-box">
+        <span class="brand-icon-logo">🥗</span>
+        <div>
+          <h1 class="brand-title">AR NutriQuest ป.6</h1>
+          <span class="brand-sub">ภารกิจอาหารและสารอาหาร วิทย์ ป.6</span>
+        </div>
+      </div>
+
+      <!-- 5 Main Game Mode Tabs -->
+      <nav class="nav-tabs-container">
+        <button class="nav-tab-btn active" data-mode="classify">
+          <span>🎮</span> แยกสารอาหาร 6 หมู่
+        </button>
+        <button class="nav-tab-btn" data-mode="plate">
+          <span>🍱</span> เชฟจัดจานสุขภาพ
+        </button>
+        <button class="nav-tab-btn" data-mode="clinic">
+          <span>🏥</span> หมอน้อยรักษาโรค
+        </button>
+        <button class="nav-tab-btn" data-mode="lab">
+          <span>🧪</span> ห้องทดลองเคมี
+        </button>
+        <button class="nav-tab-btn" data-mode="quiz">
+          <span>📝</span> แบบทดสอบ & เกียรติบัตร
+        </button>
+      </nav>
+
+      <!-- System Buttons -->
+      <div class="system-actions">
+        <button id="btn-toggle-fullscreen" class="btn-ctrl" title="เล่นแบบเต็มหน้าจอ (Fullscreen)">
+          <span class="btn-icon">⛶</span>
+          <span class="btn-label">เต็มจอ</span>
+        </button>
+        <button id="btn-toggle-collapse" class="btn-ctrl" title="ย่อ/ซ่อนแถบเมนูด้านบน">
+          <span class="btn-icon">▲</span>
+          <span class="btn-label">ย่อเมนู</span>
+        </button>
+        <button id="btn-toggle-camera" class="btn-ctrl" title="เปิด/ปิดกล้องเว็บแคม AR">
+          <span class="btn-icon">📷</span>
+          <span class="btn-label">เปิดกล้อง AR</span>
+        </button>
+        <button id="btn-toggle-voice" class="btn-ctrl" title="เปิด/ปิดเสียงพากย์ภาษาไทย">
+          🗣️ เสียงพากย์
+        </button>
+        <button id="btn-toggle-sound" class="btn-ctrl" title="เปิด/ปิดเสียงเอฟเฟกต์ SFX">
+          🔊 เสียงเกม
+        </button>
+        <button id="btn-open-encyclopedia" class="btn-ctrl" title="เปิดดูสารานุกรมสารอาหาร">
+          📚 สารานุกรม
+        </button>
+        <button id="btn-how-to-play" class="btn-ctrl" title="วิธีเล่น">
+          ❓ วิธีเล่น
+        </button>
+      </div>
+    </header>
+
+    <!-- Floating Pill to Restore Navigation when Collapsed -->
+    <button id="floating-nav-restore" class="floating-restore-pill hidden" title="แตะเพื่อแสดงแถบเมนูด้านบน">
+      <span>🥗 เมนูเกม AR</span> ▼
+    </button>
+
+    <!-- Main Game View Stages -->
+    <main class="main-stage-container">
+      <!-- Mode 1 Container -->
+      <section id="mode-classify-container" class="mode-view-pane"></section>
+
+      <!-- Mode 2 Container -->
+      <section id="mode-plate-container" class="mode-view-pane hidden"></section>
+
+      <!-- Mode 3 Container -->
+      <section id="mode-clinic-container" class="mode-view-pane hidden"></section>
+
+      <!-- Mode 4 Container -->
+      <section id="mode-lab-container" class="mode-view-pane hidden"></section>
+
+      <!-- Mode 5 Container -->
+      <section id="mode-quiz-container" class="mode-view-pane hidden"></section>
+    </main>
+  </div>
+
+  <!-- ================= MODALS & OVERLAYS ================= -->
+
+  <!-- How to Play Tutorial Modal -->
+  <div id="help-modal" class="modal-overlay hidden">
+    <div class="modal-card glassmorphism bounce-in">
+      <button class="modal-close" id="help-modal-close">&times;</button>
+      <div class="help-modal-content">
+        <div class="text-center" style="margin-bottom: 14px;">
+          <img src="assets/hero.jpg" alt="AR NutriQuest" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 14px; margin-bottom: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.15);">
+          <h2 style="color: #2563EB; margin-top: 2px;">วิธีเล่นเกม AR แบบสัมผัส (ป.6)</h2>
+        </div>
+
+        <div class="help-step-list">
+          <div class="help-step-card" style="margin-bottom: 12px; padding: 12px; background: #F0FDF4; border-radius: 12px; border-left: 4px solid #10B981;">
+            <h4>📷 1. เปิดกล้อง AR (สัมผัสโดนภาพแล้วลากได้ทันที)</h4>
+            <p style="font-size: 13px; color: #374151;">กดปุ่ม <strong>"เปิดกล้อง AR"</strong> แล้วยกมือขึ้นหน้ากล้อง <strong>เมื่อมือสัมผัสโดนภาพอาหาร ภาพจะติดมือและลากไปวางลงในถังสารอาหารได้ทันที</strong> หรือจะกำมือ/จีบนิ้วเพื่อจับก็ได้</p>
+          </div>
+
+          <div class="help-step-card" style="margin-bottom: 12px; padding: 12px; background: #EFF6FF; border-radius: 12px; border-left: 4px solid #3B82F6;">
+            <h4>👆 2. โหมดสัมผัสหน้าจอ / เมาส์ (Touch Screen Drag)</h4>
+            <p style="font-size: 13px; color: #374151;">หากเล่นบน iPad, แท็บเล็ต, จอสัมผัส หรือคอมพิวเตอร์ สามารถใช้<strong>นิ้วแตะสัมผัสโดนภาพอาหารแล้วลากไปวางได้ทันทีแบบลื่นไหล 100%</strong></p>
+          </div>
+
+          <div class="help-step-card" style="margin-bottom: 12px; padding: 12px; background: #FFFBEB; border-radius: 12px; border-left: 4px solid #F59E0B;">
+            <h4>🎯 3. เรียนรู้ 5 โหมดตรงตามบทเรียน สสวท.</h4>
+            <ul style="font-size: 12.5px; color: #4B5563; padding-left: 20px; line-height: 1.6;">
+              <li><strong>แยกสารอาหาร 6 หมู่:</strong> ลากอาหารใส่ถังสารอาหารที่ถูกต้อง ทำคอมโบและเรียนรู้ประโยชน์</li>
+              <li><strong>จัดจานสุขภาพ:</strong> จัดสัดส่วนอาหารตามธงโภชนาการ และควบคุมพลังงาน 500-600 kcal</li>
+              <li><strong>หมอน้อยรักษาโรค:</strong> วิเคราะห์อาการขาดสารอาหาร แล้วเลือกอาหารมารักษาคนไข้</li>
+              <li><strong>ห้องทดลองเคมี:</strong> ทดสอบแป้ง (ไอโอดีน), โปรตีน (ไบยูเรต), ไขมัน (กระดาษ)</li>
+              <li><strong>แบบทดสอบ & เกียรติบัตร:</strong> ตอบคำถาม 10 ข้อ แล้วสร้างเกียรติบัตรพร้อมพิมพ์ชื่อได้จริง</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="text-center" style="margin-top: 18px;">
+          <button class="btn-primary" onclick="document.getElementById('help-modal').classList.add('hidden')">
+            🚀 เข้าสู่บทเรียนและเริ่มเล่นเกม
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encyclopedia Modal -->
+  <div id="encyclopedia-modal" class="modal-overlay hidden">
+    <div class="modal-card glassmorphism bounce-in" style="max-width: 860px;">
+      <button class="modal-close" id="enc-modal-close">&times;</button>
+      <div class="encyclopedia-header text-center" style="margin-bottom: 20px;">
+        <span style="font-size: 40px;">📖 🔬 🥦</span>
+        <h2 style="color: #1E3A8A; margin-top: 4px;">สารานุกรมสารอาหาร วิทยาศาสตร์ ป.6</h2>
+        <p style="font-size: 13px; color: #6B7280;">สรุปเนื้อหาสำคัญตามหลักสูตรแกนกลางการศึกษาขั้นพื้นฐาน</p>
+      </div>
+
+      <div id="encyclopedia-content-pane"></div>
+    </div>
+  </div>
+
+  <!-- Main ES Module Script -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+/* ========================================================
+   AR NutriQuest: Responsive Design for Mobile & Tablets
+   ======================================================== */
+
+@media (max-width: 1024px) {
+  .top-nav-bar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+
+  .nav-tabs-container {
+    order: 3;
+    width: 100%;
+    justify-content: space-around;
+    margin-top: 6px;
+    overflow-x: auto;
+  }
+
+  .nav-tab-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .plate-workbench-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .plate-pantry-panel {
+    grid-column: span 2;
+    max-height: 280px;
+  }
+
+  .pantry-scroll-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .nutrient-buckets-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .lab-workspace-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lab-sidebar-right {
+    grid-column: span 2;
+  }
+
+  .sample-food-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  #app-shell {
+    padding: 8px;
+  }
+
+  .brand-title {
+    font-size: 17px;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .system-actions {
+    gap: 4px;
+  }
+
+  .btn-ctrl {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .game-mode-header {
+    flex-wrap: wrap;
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+
+  .nutrient-buckets-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .nutrient-bucket {
+    padding: 8px 4px;
+  }
+
+  .bucket-icon {
+    font-size: 22px;
+  }
+
+  .bucket-name {
+    font-size: 12px;
+  }
+
+  .plate-workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plate-pantry-panel {
+    grid-column: span 1;
+  }
+
+  .pantry-scroll-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .smart-plate-container {
+    width: 280px;
+    height: 280px;
+  }
+
+  .clinic-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cures-food-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lab-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lab-sidebar-right {
+    grid-column: span 1;
+  }
+
+  .sample-food-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .quiz-options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .enc-nutrients-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-rules-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .lobby-card {
+    padding: 16px 14px;
+  }
+
+  .lobby-title {
+    font-size: 19px;
+  }
+
+  .btn-start-game {
+    font-size: 15px;
+    padding: 10px 24px;
+  }
+
+  .countdown-number {
+    font-size: 80px;
+  }
+
+  .count-go {
+    font-size: 50px;
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "ar-food-nutrition-p6",
+  "version": "1.0.0",
+  "description": "เกม AR แบบสัมผัส เรื่อง อาหารและสารอาหาร สำหรับนักเรียนชั้น ป.6",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx -y serve . -l 3000",
+    "start": "npx -y serve . -l 3000"
+  },
+  "keywords": [
+    "ar",
+    "education",
+    "nutrition",
+    "grade6",
+    "science",
+    "threejs",
+    "mediapipe"
+  ],
+  "author": "Antigravity",
+  "license": "MIT"
+}
